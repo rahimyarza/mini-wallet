@@ -68,25 +68,30 @@ func InitWallet(w http.ResponseWriter, r *http.Request) {
 	db := setupDB()
 	defer db.Close()
 	wallet.Xid = r.FormValue("customer_xid")
-	row := db.QueryRow("SELECT token FROM wallet WHERE xid = $1", wallet.Xid)
+	if wallet.Xid == "" {
+		response.Status = "fail"
+		response.Message = "Missing data for required field."
+	} else {
+		row := db.QueryRow("SELECT token FROM wallet WHERE xid = $1", wallet.Xid)
 
-	switch err := row.Scan(&wallet.Token); err {
-	case sql.ErrNoRows:
-		wallet.Token = tokenGenerator()
-		_, err := db.Exec("INSERT INTO wallet (token, xid) VALUES ($1, $2)", wallet.Token, wallet.Xid)
-		if err != nil {
+		switch err := row.Scan(&wallet.Token); err {
+		case sql.ErrNoRows:
+			wallet.Token = tokenGenerator()
+			_, err := db.Exec("INSERT INTO wallet (token, xid) VALUES ($1, $2)", wallet.Token, wallet.Xid)
+			if err != nil {
+				response.Status = "error"
+				response.Message = "Error Execute DB"
+				break
+			}
+			response.Status = "success"
+			response.Data = wallet.Token
+		case nil:
+			response.Status = "success"
+			response.Data = wallet.Token
+		default:
 			response.Status = "error"
-			response.Message = "Error Execute DB"
-			break
+			response.Message = "Error Query DB"
 		}
-		response.Status = "success"
-		response.Data = wallet.Token
-	case nil:
-		response.Status = "success"
-		response.Data = wallet.Token
-	default:
-		response.Status = "error"
-		response.Message = "Error Query DB"
 	}
 
 	json.NewEncoder(w).Encode(response)
